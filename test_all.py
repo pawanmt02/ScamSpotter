@@ -15,7 +15,7 @@ from app.data.safe_domains import is_domain_safe
 
 def run_tests():
     print("=" * 60)
-    print("SCAM SPOTTER - END-TO-END VALIDATION SUITE (Team P K)")
+    print("SCAM SPOTTER - HIGH-ACCURACY VALIDATION SUITE (Team P K)")
     print("=" * 60)
     
     passed = 0
@@ -32,6 +32,7 @@ def run_tests():
     print(f"\n[Test 1] Official SBI KYC Baseline Test Case:")
     print(f"  Input: {sbi_text[:60]}...")
     print(f"  Score: {res1.score} / 100  | Risk Tier: {res1.risk_tier}")
+    print(f"  Brand Spoof Detected: {res1.brand_impersonation}")
     print(f"  Rules Triggered: {[r.category for r in res1.rules_triggered if r.triggered]}")
     print(f"  Extracted Tokens: {[s.token for s in res1.highlight_tokens]}")
     
@@ -54,12 +55,36 @@ def run_tests():
     else:
         print("  --> FAIL: Expected 0/100 Low Risk.")
 
-    # Test 3: Safe Domain URL (Should NOT trigger suspicious link)
+    # Test 3: Neutral Mention of 'today' (False positive prevention)
+    total += 1
+    today_text = "Are you available today afternoon for an informal catchup?"
+    res3 = scan_message(today_text)
+    print(f"\n[Test 3] False Positive Prevention: Neutral 'today':")
+    print(f"  Score: {res3.score} / 100")
+    if res3.score == 0:
+        print("  --> PASS: Neutral 'today' not falsely flagged as urgency.")
+        passed += 1
+    else:
+        print("  --> FAIL: Neutral 'today' triggered false positive.")
+
+    # Test 4: Neutral Mention of 'bank account' (False positive prevention)
+    total += 1
+    bank_text = "I checked my bank account balance and everything is in order."
+    res4 = scan_message(bank_text)
+    print(f"\n[Test 4] False Positive Prevention: Neutral 'bank account':")
+    print(f"  Score: {res4.score} / 100")
+    if res4.score == 0:
+        print("  --> PASS: Passive 'bank account' mention not flagged as credential grab.")
+        passed += 1
+    else:
+        print("  --> FAIL: Passive bank account triggered false positive.")
+
+    # Test 5: Safe Domain URL (Should NOT trigger suspicious link)
     total += 1
     safe_link_text = "Please log into https://sbi.co.in to view your official interest statement."
-    res3 = scan_message(safe_link_text)
-    link_rule = next(r for r in res3.rules_triggered if r.id == "RULE_LINK")
-    print(f"\n[Test 3] Verified Safe Domain Check (sbi.co.in):")
+    res5 = scan_message(safe_link_text)
+    link_rule = next(r for r in res5.rules_triggered if r.id == "RULE_LINK")
+    print(f"\n[Test 5] Verified Safe Domain Check (sbi.co.in):")
     print(f"  Link Rule Triggered: {link_rule.triggered} (Points: {link_rule.score_awarded})")
     if not link_rule.triggered:
         print("  --> PASS: Official domain properly whitelisted.")
@@ -67,57 +92,31 @@ def run_tests():
     else:
         print("  --> FAIL: Safe domain false positive.")
 
-    # Test 4: Suspicious Insecure Link HTTP (Should trigger +25)
+    # Test 6: Insecure HTTP & Untrusted TLD (.xyz):
     total += 1
     http_link_text = "Claim your package at http://tracking-courier-post.xyz"
-    res4 = scan_message(http_link_text)
-    link_rule2 = next(r for r in res4.rules_triggered if r.id == "RULE_LINK")
-    print(f"\n[Test 4] Insecure HTTP & Untrusted TLD (.xyz):")
-    print(f"  Score: {res4.score} (Link Rule: +{link_rule2.score_awarded})")
+    res6 = scan_message(http_link_text)
+    link_rule2 = next(r for r in res6.rules_triggered if r.id == "RULE_LINK")
+    print(f"\n[Test 6] Insecure HTTP & Untrusted TLD (.xyz):")
+    print(f"  Score: {res6.score} (Link Rule: +{link_rule2.score_awarded})")
     if link_rule2.triggered and link_rule2.score_awarded == 25:
         print("  --> PASS: Untrusted/HTTP link flagged (+25).")
         passed += 1
     else:
         print("  --> FAIL: Insecure link missed.")
 
-    # Test 5: Credential Grab Only (Should trigger +40)
+    # Test 7: Sensitive Credential Grab
     total += 1
     cred_text = "Please provide your debit card PIN and login password to continue."
-    res5 = scan_message(cred_text)
-    cred_rule = next(r for r in res5.rules_triggered if r.id == "RULE_CREDENTIAL")
-    print(f"\n[Test 5] Sensitive Credential Grab:")
-    print(f"  Score: {res5.score} (Credential Rule: +{cred_rule.score_awarded})")
+    res7 = scan_message(cred_text)
+    cred_rule = next(r for r in res7.rules_triggered if r.id == "RULE_CREDENTIAL")
+    print(f"\n[Test 7] Sensitive Credential Grab:")
+    print(f"  Score: {res7.score} (Credential Rule: +{cred_rule.score_awarded})")
     if cred_rule.triggered and cred_rule.score_awarded == 40:
         print("  --> PASS: Credential solicitation flagged (+40).")
         passed += 1
     else:
         print("  --> FAIL: Credential solicitation missed.")
-
-    # Test 6: Coercive Threats Only (Should trigger +15)
-    total += 1
-    threat_text = "Your connection is deactivated and pending legal action."
-    res6 = scan_message(threat_text)
-    threat_rule = next(r for r in res6.rules_triggered if r.id == "RULE_THREAT")
-    print(f"\n[Test 6] Threat & Intimidation Vector:")
-    print(f"  Score: {res6.score} (Threat Rule: +{threat_rule.score_awarded})")
-    if threat_rule.triggered and threat_rule.score_awarded == 15:
-        print("  --> PASS: Threat flagged (+15).")
-        passed += 1
-    else:
-        print("  --> FAIL: Threat missed.")
-
-    # Test 7: Urgency Only (Should trigger +20)
-    total += 1
-    urgency_text = "Act now within 2 hours or offer expires today immediately."
-    res7 = scan_message(urgency_text)
-    urgency_rule = next(r for r in res7.rules_triggered if r.id == "RULE_URGENCY")
-    print(f"\n[Test 7] Urgency & Artificial Panic Vector:")
-    print(f"  Score: {res7.score} (Urgency Rule: +{urgency_rule.score_awarded})")
-    if urgency_rule.triggered and urgency_rule.score_awarded == 20:
-        print("  --> PASS: Urgency flagged (+20).")
-        passed += 1
-    else:
-        print("  --> FAIL: Urgency missed.")
 
     print("\n" + "=" * 60)
     print(f"RESULTS: {passed}/{total} Tests Passed ({int(passed/total*100)}%)")

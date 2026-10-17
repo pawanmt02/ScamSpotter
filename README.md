@@ -33,12 +33,12 @@
 ### Feature 2: Deterministic Rule Analysis (The Core Logic)
 Rather than relying on opaque machine learning classifiers, Scam Spotter enforces a strictly explainable rule engine with predefined, calibrated weights across four threat vectors:
 
-| Threat Vector | Weight | Trigger Criteria & Logic | Examples |
+| Threat Vector | Weight | High-Accuracy Trigger Logic | Examples |
 |---|:---:|---|---|
-| **1. Urgency Check** | **+20 pts** | Artificial panic deadlines that suppress critical thinking: `(?i)\b(today\|immediately\|urgent\|within \d+ hours\|hurry\|asap\|deadline)\b` | *"Update immediately today to avoid deactivation"* |
-| **2. Coercive Threats** | **+15 pts** | Intimidation involving penalties, police, or account disruption: `(?i)\b(blocked\|suspended\|legal action\|incomplete\|penalty\|arrest\|police)\b` | *"Your bank account has been blocked due to incomplete KYC"* |
-| **3. Suspicious Links** | **+25 pts** | Regex URL extraction with protocol inspection (HTTP vs. HTTPS) and domain verification against safe whitelist (`sbi.co.in`, `gov.in`, `hdfcbank.com`, etc.). | `http://sbi-kyc-verification.xyz` (Insecure HTTP + unverified TLD) |
-| **4. Credential Grab** | **+40 pts** | Solicitation of high-risk authentication secrets: `(?i)\b(otp\|password\|pin\|cvv\|debit card\|bank account\|credentials)\b` | *"Enter your OTP and PIN to unblock"* |
+| **1. Urgency Check** | **+20 pts** | Contextual panic pressure (e.g. `blocked today`, `expire today`, `due today`) and explicit urgency terms (`immediately`, `within 2 hours`, `deadline`, `asap`). Prevents false positives on casual "today". | *"blocked today due to incomplete KYC"*, *"update immediately"* |
+| **2. Coercive Threats** | **+15 pts** | Direct intimidation (`blocked`, `suspended`, `legal action`, `penalty`, `police`) and contextual process coercion (`incomplete KYC/PAN/profile`). | *"blocked"*, *"incomplete KYC"*, *"legal action"* |
+| **3. Suspicious Links** | **+25 pts** | URL extraction, protocol checking (`http://`), domain whitelist validation, high-risk TLDs (`.xyz`, `.top`), and **Brand Impersonation / Typosquatting detection** (e.g., spoofing SBI, HDFC, ICICI, Paytm). | `http://sbi-kyc-verification.xyz` (Spoofing SBI on untrusted `.xyz`) |
+| **4. Credential Grab** | **+40 pts** | Solicitation of sensitive authentication secrets (`otp`, `pin`, `password`, `cvv`, `mpin`) and imperatives (`enter/share your credentials`). Passive mentions of "bank account" are not falsely flagged. | *"Enter your OTP and PIN"* |
 | **Total Aggregation** | **100 pts** | Calibrated score mapped directly into standardized Risk Tiers: **Low** (0–29), **Medium** (30–59), **High** (60–100). | Baseline test case hits **exactly 100/100**. |
 
 ### Feature 3: Visual Output & Risk Scoring

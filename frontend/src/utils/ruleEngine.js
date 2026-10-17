@@ -1,4 +1,4 @@
-// Client-side rule engine matching the FastAPI backend logic
+// Client-side rule engine matching the FastAPI backend logic with high accuracy
 const SAFE_DOMAINS = new Set([
   'sbi.co.in',
   'onlinesbi.sbi',
@@ -30,6 +30,17 @@ const SAFE_DOMAINS = new Set([
   'telegram.org',
 ]);
 
+const KNOWN_BRANDS = [
+  'sbi', 'yono', 'hdfc', 'icici', 'axis', 'kotak', 'pnb', 'bob', 'baroda',
+  'paytm', 'phonepe', 'gpay', 'aadhaar', 'uidai', 'kyc', 'incometax',
+  'electricity', 'bsnl', 'jio', 'airtel', 'amazon', 'netflix'
+];
+
+const SUSPICIOUS_TLDS = new Set([
+  'xyz', 'top', 'tk', 'ml', 'ga', 'cf', 'gq', 'club', 'vip', 'online',
+  'site', 'app', 'live', 'cc', 'work', 'click', 'rest', 'cam', 'fit'
+]);
+
 function isDomainSafe(domain) {
   if (!domain) return false;
   const clean = domain.toLowerCase().trim();
@@ -40,9 +51,19 @@ function isDomainSafe(domain) {
   return false;
 }
 
-const RE_URGENCY = /\b(today|immediately|urgent(?:ly)?|within\s+\d+\s+(?:hours?|hrs?|minutes?|mins?)|hurry|asap|act\s+now|right\s+now|expire[s|d]?|final\s+notice|last\s+chance|limited\s+time|deadline|instant(?:ly)?)\b/gi;
-const RE_THREAT = /\b(blocked|suspended|suspension|legal\s+action|incomplete|deactivated|penalty|penalties|arrest(?:ed)?|police|court|terminated|fine|warrant|lawsuit|frozen|freeze|closed|disabled)\b/gi;
-const RE_CREDENTIAL = /\b(otp|one\s+time\s+password|passwords?|pin|mpin|cvv|cvc|card\s+number|debit\s+card|credit\s+card|bank\s+account|pan\s+card|aadhaar|aadhar|credentials?|login\s+details|security\s+code)\b/gi;
+// 1. Urgency: Explicit panic or contextual urgency
+const RE_URGENCY_EXPLICIT = /\b(immediately|urgent(?:ly)?|within\s+\d+\s+(?:hours?|hrs?|minutes?|mins?)|hurry|asap|act\s+now|right\s+now|expire[s|d]?|final\s+notice|last\s+chance|limited\s+time|deadline|instant(?:ly)?|immediate\s+action)\b/gi;
+const RE_URGENCY_CONTEXTUAL = /\b(?:blocked|suspended|expires?|due|pay|verify|update|complete|disconnected|action)\s+(?:by\s+)?today\b|\btoday\s+(?:due\s+to|itself|only|before\s+\d+|is\s+the\s+last)\b|\bby\s+today\s+(?:evening|night|\d+\s*(?:am|pm)?)\b/gi;
+
+// 2. Threat: Explicit threat or contextual pressure
+const RE_THREAT_EXPLICIT = /\b(blocked|suspended|suspension|legal\s+action|deactivated|penalty|penalties|arrest(?:ed)?|police(?:\s+complaint|\s+case|\s+involvement|\s+action)?|court(?:\s+action|\s+notice|\s+order|\s+case)?|warrant|lawsuit|freeze|frozen|disconnected|disconnection|terminated|fine)\b/gi;
+const RE_THREAT_CONTEXTUAL = /\bincomplete\s+(?:kyc|pan|verification|profile|details|documents?|auth|form)\b|\b(?:kyc|pan|profile|account)\s+(?:is\s+)?incomplete\b/gi;
+
+// 3. Credential: Direct secrets or imperative demands
+const RE_CREDENTIAL_EXPLICIT = /\b(otp|one\s+time\s+password|passwords?|pin|mpin|cvv|cvc|atm\s*pin|security\s*pin|transaction\s*password|security\s*code|netbanking\s*password)\b/gi;
+const RE_CREDENTIAL_IMPERATIVE = /\b(?:enter|share|send|provide|submit|update|verify|confirm)\s+(?:your\s+)?(?:credentials|netbanking|card\s+number|account\s+number|debit\s+card|credit\s+card|bank\s+account|pan\s+card|aadhaar)\b/gi;
+
+// 4. URL
 const RE_URL = /\b(?:https?:\/\/|www\.)[^\s<>"'{}|\\^`[\]]+|[a-zA-Z0-9.-]+\.(?:com|org|net|xyz|top|info|biz|site|club|vip|online|app|live|co|in|cc|tk|ml|ga|cf|gq)(?:\/[^\s<>"'{}|\\^`[\]]*)?/gi;
 
 export function evaluateMessageLocally(text) {
@@ -56,7 +77,9 @@ export function evaluateMessageLocally(text) {
       rules_triggered: [],
       highlight_tokens: [],
       action_steps: getDefaultActionSteps([]),
-      character_count: 0
+      character_count: 0,
+      brand_impersonation: null,
+      confidence_level: 'High'
     };
   }
 
@@ -64,8 +87,19 @@ export function evaluateMessageLocally(text) {
   const urgencyMatches = [];
   const urgencySpans = [];
   let m;
-  RE_URGENCY.lastIndex = 0;
-  while ((m = RE_URGENCY.exec(cleanText)) !== null) {
+  RE_URGENCY_EXPLICIT.lastIndex = 0;
+  while ((m = RE_URGENCY_EXPLICIT.exec(cleanText)) !== null) {
+    urgencyMatches.push(m[0]);
+    urgencySpans.push({
+      token: m[0],
+      category: 'urgency',
+      start: m.index,
+      end: m.index + m[0].length,
+      color: 'amber'
+    });
+  }
+  RE_URGENCY_CONTEXTUAL.lastIndex = 0;
+  while ((m = RE_URGENCY_CONTEXTUAL.exec(cleanText)) !== null) {
     urgencyMatches.push(m[0]);
     urgencySpans.push({
       token: m[0],
@@ -91,8 +125,19 @@ export function evaluateMessageLocally(text) {
   // 2. Threat (+15)
   const threatMatches = [];
   const threatSpans = [];
-  RE_THREAT.lastIndex = 0;
-  while ((m = RE_THREAT.exec(cleanText)) !== null) {
+  RE_THREAT_EXPLICIT.lastIndex = 0;
+  while ((m = RE_THREAT_EXPLICIT.exec(cleanText)) !== null) {
+    threatMatches.push(m[0]);
+    threatSpans.push({
+      token: m[0],
+      category: 'threat',
+      start: m.index,
+      end: m.index + m[0].length,
+      color: 'rose'
+    });
+  }
+  RE_THREAT_CONTEXTUAL.lastIndex = 0;
+  while ((m = RE_THREAT_CONTEXTUAL.exec(cleanText)) !== null) {
     threatMatches.push(m[0]);
     threatSpans.push({
       token: m[0],
@@ -119,6 +164,7 @@ export function evaluateMessageLocally(text) {
   const linkMatches = [];
   const linkSpans = [];
   let linkSuspicious = false;
+  let brandSpoof = null;
   RE_URL.lastIndex = 0;
   while ((m = RE_URL.exec(cleanText)) !== null) {
     const rawUrl = m[0];
@@ -133,11 +179,27 @@ export function evaluateMessageLocally(text) {
     const isHttp = rawUrl.toLowerCase().startsWith('http://');
     const isSafe = isDomainSafe(domain);
 
+    const parts = domain.replace(/-/g, '.').split('.');
+    const tld = parts[parts.length - 1];
+    let matchedBrand = null;
+    for (const b of KNOWN_BRANDS) {
+      if (domain.includes(b)) {
+        matchedBrand = b.toUpperCase();
+        break;
+      }
+    }
+
     if (isHttp || !isSafe) {
       linkSuspicious = true;
       const reasons = [];
       if (isHttp) reasons.push('insecure HTTP');
       if (!isSafe) reasons.push(`unverified domain '${domain}'`);
+      if (SUSPICIOUS_TLDS.has(tld)) reasons.push(`high-risk TLD (.${tld})`);
+      if (matchedBrand && !isSafe) {
+        reasons.push(`spoofing brand '${matchedBrand}'`);
+        brandSpoof = `Impersonating ${matchedBrand} on unverified domain '${domain}'`;
+      }
+
       linkMatches.push(`${rawUrl} (${reasons.join(', ')})`);
       linkSpans.push({
         token: rawUrl,
@@ -163,8 +225,19 @@ export function evaluateMessageLocally(text) {
   // 4. Credential Grab (+40)
   const credMatches = [];
   const credSpans = [];
-  RE_CREDENTIAL.lastIndex = 0;
-  while ((m = RE_CREDENTIAL.exec(cleanText)) !== null) {
+  RE_CREDENTIAL_EXPLICIT.lastIndex = 0;
+  while ((m = RE_CREDENTIAL_EXPLICIT.exec(cleanText)) !== null) {
+    credMatches.push(m[0]);
+    credSpans.push({
+      token: m[0],
+      category: 'credential',
+      start: m.index,
+      end: m.index + m[0].length,
+      color: 'red'
+    });
+  }
+  RE_CREDENTIAL_IMPERATIVE.lastIndex = 0;
+  while ((m = RE_CREDENTIAL_IMPERATIVE.exec(cleanText)) !== null) {
     credMatches.push(m[0]);
     credSpans.push({
       token: m[0],
@@ -225,17 +298,28 @@ export function evaluateMessageLocally(text) {
     summary,
     rules_triggered: rules,
     highlight_tokens: resolvedSpans,
-    action_steps: getDefaultActionSteps(rules),
-    character_count: cleanText.length
+    action_steps: getDefaultActionSteps(rules, brandSpoof),
+    character_count: cleanText.length,
+    brand_impersonation: brandSpoof,
+    confidence_level: 'High (Deterministic Match)'
   };
 }
 
-function getDefaultActionSteps(rules) {
+function getDefaultActionSteps(rules, brandSpoof = null) {
   const actions = [];
   const hasCredential = rules.some(r => r.id === 'RULE_CREDENTIAL' && r.triggered);
   const hasLink = rules.some(r => r.id === 'RULE_LINK' && r.triggered);
   const hasThreat = rules.some(r => r.id === 'RULE_THREAT' && r.triggered);
   const hasUrgency = rules.some(r => r.id === 'RULE_URGENCY' && r.triggered);
+
+  if (brandSpoof) {
+    actions.push({
+      title: `Brand Spoofing Warning: ${brandSpoof}`,
+      description: 'The sender is impersonating an official institution using an unofficial fake domain. Do not interact with this page.',
+      priority: 'critical',
+      icon: 'shield-alert'
+    });
+  }
 
   if (hasCredential) {
     actions.push({

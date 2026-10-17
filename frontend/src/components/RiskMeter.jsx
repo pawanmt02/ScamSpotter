@@ -1,7 +1,7 @@
 import React from 'react';
-import { ShieldAlert, ShieldCheck, AlertTriangle, Info } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, AlertOctagon, CheckCircle2 } from 'lucide-react';
 
-export default function RiskMeter({ score, riskTier, riskColor, summary, rulesTriggered }) {
+export default function RiskMeter({ score, riskTier, riskColor, summary, rulesTriggered, brandImpersonation, confidenceLevel }) {
   // Tier info mapping
   const tierConfig = {
     Low: {
@@ -37,7 +37,6 @@ export default function RiskMeter({ score, riskTier, riskColor, summary, rulesTr
   const TierIcon = currentTier.icon;
 
   // Circular gauge calculations
-  // Circle radius: 64, circumference: 2 * PI * 64 = 402.12
   const radius = 64;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (score / 100) * circumference;
@@ -86,13 +85,16 @@ export default function RiskMeter({ score, riskTier, riskColor, summary, rulesTr
 
         {/* Risk Tier & High-Level Summary */}
         <div className="space-y-2">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${currentTier.badgeClass}`}>
               <TierIcon className="w-3.5 h-3.5" />
               <span>{currentTier.label} ({score}/100)</span>
             </div>
             <span className="text-xs text-slate-400 font-mono">
               Tier: {score < 30 ? '0-29' : score < 60 ? '30-59' : '60-100'}
+            </span>
+            <span className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-medium">
+              High Precision Engine
             </span>
           </div>
 
@@ -103,6 +105,14 @@ export default function RiskMeter({ score, riskTier, riskColor, summary, rulesTr
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
             {summary}
           </p>
+
+          {/* Brand Spoofing Alert Pill */}
+          {brandImpersonation && (
+            <div className="mt-2 inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs font-semibold animate-pulse">
+              <AlertOctagon className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <span>Brand Spoofing: {brandImpersonation}</span>
+            </div>
+          )}
         </div>
       </div>
 

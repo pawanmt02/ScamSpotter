@@ -28,6 +28,8 @@ def test_official_sbi_kyc_baseline():
     assert result.score == 100
     assert result.risk_tier == "High"
     assert result.risk_color == "rose"
+    assert result.brand_impersonation is not None
+    assert "SBI" in result.brand_impersonation
     
     # Check all 4 rules triggered
     rules_dict = {r.id: r for r in result.rules_triggered}
@@ -64,6 +66,22 @@ def test_safe_message_edge_case():
     assert len(result.highlight_tokens) == 0
 
 
+def test_neutral_today_not_penalized():
+    """Contextual accuracy: Casual mention of 'today' without urgency should not trigger urgency."""
+    result = scan_message("Are you free today for an informal coffee catch-up?")
+    assert result.score == 0
+    rules_dict = {r.id: r for r in result.rules_triggered}
+    assert rules_dict["RULE_URGENCY"].triggered is False
+
+
+def test_neutral_bank_account_not_penalized():
+    """Contextual accuracy: Merely mentioning 'bank account' without OTP/credential demand is safe."""
+    result = scan_message("I verified that my bank account balance is sufficient.")
+    assert result.score == 0
+    rules_dict = {r.id: r for r in result.rules_triggered}
+    assert rules_dict["RULE_CREDENTIAL"].triggered is False
+
+
 def test_empty_string():
     """Empty input should score 0 gracefully."""
     result = scan_message("")
@@ -72,7 +90,7 @@ def test_empty_string():
 
 
 def test_urgency_only():
-    text = "Please send the report immediately today."
+    text = "Please send the report immediately."
     result = scan_message(text)
     assert result.score == 20
     assert result.risk_tier == "Low"
@@ -82,7 +100,7 @@ def test_urgency_only():
 
 
 def test_threat_only():
-    text = "Your membership has been suspended due to an incomplete form."
+    text = "Your membership has been suspended due to an incomplete KYC profile."
     result = scan_message(text)
     assert result.score == 15
     rules_dict = {r.id: r for r in result.rules_triggered}

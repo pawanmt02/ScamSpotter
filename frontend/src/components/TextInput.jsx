@@ -1,9 +1,17 @@
 import React, { useRef } from 'react';
-import { Search, Clipboard, Trash2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Search, Clipboard, Trash2, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
 
 const MAX_CHARS = 2000;
 
-export default function TextInput({ text, setText, onScan, isScanning, onSelectSample }) {
+export default function TextInput({
+  text,
+  setText,
+  onScan,
+  isScanning,
+  onSelectSample,
+  hasScanned,
+  isStale
+}) {
   const textareaRef = useRef(null);
   const charCount = text.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -19,7 +27,6 @@ export default function TextInput({ text, setText, onScan, isScanning, onSelectS
         }
       }
     } catch (err) {
-      // Fallback focus for manual paste
       if (textareaRef.current) {
         textareaRef.current.focus();
       }
@@ -34,7 +41,6 @@ export default function TextInput({ text, setText, onScan, isScanning, onSelectS
   };
 
   const handleKeyDown = (e) => {
-    // Submit on Ctrl+Enter or Cmd+Enter
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && canScan) {
       e.preventDefault();
       onScan();
@@ -84,18 +90,27 @@ export default function TextInput({ text, setText, onScan, isScanning, onSelectS
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={5}
-          placeholder="e.g. 'Dear Customer, your SBI Bank account has been blocked today due to incomplete KYC. Update immediately to avoid suspension: http://sbi-kyc-verification.xyz or your account will face legal action. Enter your OTP and PIN.'"
+          placeholder="Paste an SMS or WhatsApp message here... (e.g. 'Dear Customer, your SBI Bank account has been blocked today due to incomplete KYC...')"
           className={`w-full rounded-xl bg-slate-950/70 text-slate-100 placeholder-slate-500 border p-4 text-sm sm:text-base leading-relaxed resize-y focus:ring-2 focus:ring-blue-500 transition-colors ${
             isOverLimit ? 'border-rose-500/80 focus:border-rose-500' : 'border-slate-800 focus:border-blue-500'
           }`}
           maxLength={MAX_CHARS + 100}
         />
 
-        {/* Floating character counter & Limit check */}
+        {/* Floating status & character counter */}
         <div className="flex items-center justify-between mt-2 px-1 text-xs">
-          <span className="text-slate-500 hidden sm:inline">
-            Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-slate-300">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-slate-300">Enter</kbd> to scan
-          </span>
+          <div className="flex items-center space-x-2">
+            {isStale && hasScanned ? (
+              <span className="text-amber-400 font-medium flex items-center space-x-1">
+                <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: '4s' }} />
+                <span>Text modified — Click "Scan for Risk" to analyze</span>
+              </span>
+            ) : (
+              <span className="text-slate-500 hidden sm:inline">
+                Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-slate-300">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-slate-300">Enter</kbd> to run scan
+              </span>
+            )}
+          </div>
 
           <div className="ml-auto flex items-center space-x-2">
             {isOverLimit && (
@@ -129,7 +144,7 @@ export default function TextInput({ text, setText, onScan, isScanning, onSelectS
             onClick={() => onSelectSample('sbi_kyc')}
             className="px-2.5 py-1 text-xs rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition font-medium"
           >
-            🚨 SBI KYC (Official 100/100)
+            🚨 SBI KYC (100/100)
           </button>
           <button
             type="button"
@@ -147,7 +162,7 @@ export default function TextInput({ text, setText, onScan, isScanning, onSelectS
           </button>
         </div>
 
-        {/* Scan Trigger Button */}
+        {/* Scan Trigger Button - Executes scan once on click */}
         <button
           type="button"
           onClick={onScan}
@@ -161,12 +176,12 @@ export default function TextInput({ text, setText, onScan, isScanning, onSelectS
           {isScanning ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Analyzing Threat Vectors...</span>
+              <span>Scanning Threat Vectors...</span>
             </>
           ) : (
             <>
               <Search className="w-4 h-4" />
-              <span>Scan for Risk</span>
+              <span>{hasScanned && isStale ? 'Re-Scan for Risk' : 'Scan for Risk'}</span>
             </>
           )}
         </button>

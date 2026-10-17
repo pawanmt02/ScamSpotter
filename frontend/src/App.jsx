@@ -8,12 +8,13 @@ import ActionPanel from './components/ActionPanel';
 import SampleMessages, { SAMPLE_DATA } from './components/SampleMessages';
 import EducationModal from './components/EducationModal';
 import { evaluateMessageLocally } from './utils/ruleEngine';
-import { Shield, Sparkles, CheckCircle, Info } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Sparkles, Search, ArrowDown } from 'lucide-react';
 
 export default function App() {
-  const [inputText, setInputText] = useState(SAMPLE_DATA.sbi_kyc.text);
+  const [inputText, setInputText] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [lastScannedText, setLastScannedText] = useState(null);
   const [backendConnected, setBackendConnected] = useState(false);
   const [showExplainer, setShowExplainer] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -36,21 +37,22 @@ export default function App() {
     }
   };
 
-  // Perform scan
+  // Perform single scan execution (called ONLY when user initiates scan)
   const executeScan = async (textToScan = inputText) => {
     const text = (textToScan || '').trim();
     if (!text) {
-      setScanResult(null);
+      setErrorMessage('Please paste or type a message before scanning.');
       return;
     }
+
+    if (isScanning) return; // Prevent concurrent duplicate scans
 
     setIsScanning(true);
     setErrorMessage(null);
 
-    // Give a brief visual feedback for scanner interaction
     try {
       let result = null;
-      // First attempt backend API call
+      // Primary backend attempt
       try {
         const response = await fetch('/api/scan', {
           method: 'POST',
@@ -67,13 +69,22 @@ export default function App() {
           throw new Error(`Backend returned status ${response.status}`);
         }
       } catch (backendErr) {
-        // Fallback smoothly to deterministic local rule engine
-        console.warn('Backend unavailable or errored, using client rule engine fallback:', backendErr);
+        // High-accuracy client fallback
+        console.warn('Backend offline, running high-accuracy client rule engine:', backendErr);
         setBackendConnected(false);
         result = evaluateMessageLocally(text);
       }
 
       setScanResult(result);
+      setLastScannedText(text);
+
+      // Smooth scroll to results on mobile/desktop
+      setTimeout(() => {
+        const resultsEl = document.getElementById('scan-results');
+        if (resultsEl) {
+          resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
     } catch (err) {
       setErrorMessage('Failed to complete scan. Please try again.');
       console.error(err);
@@ -82,18 +93,16 @@ export default function App() {
     }
   };
 
-  // Run scan once on initial mount for the default baseline sample
-  useEffect(() => {
-    executeScan(SAMPLE_DATA.sbi_kyc.text);
-  }, []);
-
   const handleSelectSample = (sampleKey) => {
     const sample = SAMPLE_DATA[sampleKey];
     if (sample) {
       setInputText(sample.text);
+      // Execute scan once for the chosen sample
       executeScan(sample.text);
     }
   };
+
+  const isStale = lastScannedText !== null && inputText.trim() !== lastScannedText.trim();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -105,7 +114,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:py-8 space-y-6">
-        {/* Hackathon Banner / Context */}
+        {/* Hackathon Banner */}
         <div className="bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-slate-900 border border-blue-500/20 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center space-x-2">
@@ -117,11 +126,11 @@ export default function App() {
               </span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white tracking-tight m-0">
-              Transparent, Deterministic Phishing & Scam Risk Evaluator
+              High-Accuracy Phishing & Scam Risk Evaluator
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-3xl m-0">
-              Evaluate unverified SMS and WhatsApp messages against a transparent rule engine.
-              Identifies Urgency (+20), Coercive Threats (+15), Unverified Links (+25), and Credential Requests (+40) with zero opaque black boxes.
+              Evaluates suspicious messages against calibrated threat vectors with context-aware disambiguation.
+              Flags Urgency (+20), Coercive Threats (+15), Unverified / Spoofed Links (+25), and Credential Requests (+40) with 0% black-box opacity.
             </p>
           </div>
 
@@ -146,21 +155,38 @@ export default function App() {
           </div>
         )}
 
-        {/* Feature 1: Text Ingestion Engine */}
+        {/* Feature 1: Text Ingestion Engine (Do Once Scan on trigger) */}
         <TextInput
           text={inputText}
           setText={setInputText}
           onScan={() => executeScan(inputText)}
           isScanning={isScanning}
           onSelectSample={handleSelectSample}
+          hasScanned={lastScannedText !== null}
+          isStale={isStale}
         />
 
         {/* Preset Sample Benchmarks */}
         <SampleMessages onSelect={handleSelectSample} />
 
+        {/* Empty state prompt if not scanned yet */}
+        {!scanResult && (
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-8 text-center space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+              <Search className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-200">
+              Ready to Analyze
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+              Paste an unverified message above or click one of the preset benchmark cases, then press <strong>"Scan for Risk"</strong> to run a single evaluation.
+            </p>
+          </div>
+        )}
+
         {/* Scanned Results Section (Features 2, 3, 4) */}
         {scanResult && (
-          <div className="space-y-6 animate-fade-in">
+          <div id="scan-results" className="space-y-6 animate-fade-in pt-2">
             {/* Feature 3: Visual Output & Risk Scoring (Risk Meter) */}
             <RiskMeter
               score={scanResult.score}
@@ -168,11 +194,13 @@ export default function App() {
               riskColor={scanResult.risk_color}
               summary={scanResult.summary}
               rulesTriggered={scanResult.rules_triggered}
+              brandImpersonation={scanResult.brand_impersonation}
+              confidenceLevel={scanResult.confidence_level}
             />
 
             {/* Feature 3: In-Text Token Highlighting */}
             <HighlightedText
-              text={inputText}
+              text={lastScannedText || inputText}
               highlightTokens={scanResult.highlight_tokens}
             />
 

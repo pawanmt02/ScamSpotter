@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +11,7 @@ class TokenSpan(BaseModel):
     category: str  # "urgency", "threat", "link", "credential"
     start: int
     end: int
-    color: str     # visual indicator theme e.g. "amber", "purple", "blue", "red"
+    color: str     # visual indicator theme e.g. "amber", "rose", "blue", "red"
 
 
 class RuleResult(BaseModel):
@@ -44,3 +44,5 @@ class ScanResponse(BaseModel):
     highlight_tokens: List[TokenSpan]
     action_steps: List[ActionStep]
     character_count: int
+    brand_impersonation: Optional[str] = None
+    confidence_level: Optional[str] = "High (Deterministic Rule Engine)"
